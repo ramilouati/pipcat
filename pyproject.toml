@@ -42,6 +42,7 @@ dependencies = [
     # Inlined here instead of using a self-referential extra for Poetry compatibility.
     "transformers>=4.48.0,<6",
     "onnxruntime~=1.23.2",
+    "websockets>=15.0.1",
 ]
 
 [project.urls]
