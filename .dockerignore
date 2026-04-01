@@ -28,3 +28,11 @@
 **/.DS_Store
 **/.env
 fly.toml
+
+# Smaller Docker build context (image only needs pyproject, src, app.py)
+tests/
+examples/
+docs/
+.claude/
+.github/
+changelog/
