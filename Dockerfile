@@ -23,7 +23,7 @@ RUN pip install --no-cache-dir uv \
     "pipecat-ai[webrtc,silero,deepgram,cartesia,openrouter,runner]" \
     "python-dotenv>=1.0.1,<2.0.0"
 
-COPY examples/quickstart/bot_openrouter.py /app/bot.py
+COPY bot_openrouter.py /app/bot.py
 
 EXPOSE 7860
 ENV PORT=7860
