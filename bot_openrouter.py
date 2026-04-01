@@ -22,6 +22,7 @@ from pipecat.services.cartesia.tts import CartesiaTTSService
 from pipecat.services.deepgram.stt import DeepgramSTTService
 from pipecat.services.openrouter.llm import OpenRouterLLMService
 from pipecat.transports.base_transport import BaseTransport, TransportParams
+from pipecat.transports.daily.transport import DailyParams
 
 load_dotenv(override=True)
 
@@ -79,6 +80,7 @@ async def bot(runner_args: RunnerArguments):
     transport = await create_transport(
         runner_args,
         {
+            "daily": lambda: DailyParams(audio_in_enabled=True, audio_out_enabled=True),
             "webrtc": lambda: TransportParams(audio_in_enabled=True, audio_out_enabled=True),
         },
     )

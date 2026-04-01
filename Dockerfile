@@ -1,4 +1,4 @@
-# Pipecat voice bot for Railway: WebRTC client at /client (OpenRouter + Deepgram + Cartesia).
+# Pipecat voice bot for Railway: Daily/WebRTC client at /client.
 # Railway sets PORT; bind 0.0.0.0 for public access.
 
 FROM python:3.12-slim-bookworm
@@ -20,7 +20,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 RUN pip install --no-cache-dir uv \
     && uv pip install --system \
-    "pipecat-ai[webrtc,silero,deepgram,cartesia,openrouter,runner]" \
+    "pipecat-ai[daily,webrtc,silero,deepgram,cartesia,openrouter,runner]" \
     "python-dotenv>=1.0.1,<2.0.0"
 
 COPY bot_openrouter.py /app/bot.py
@@ -28,4 +28,4 @@ COPY bot_openrouter.py /app/bot.py
 EXPOSE 7860
 ENV PORT=7860
 
-CMD ["sh", "-c", "exec python /app/bot.py --host 0.0.0.0 --port ${PORT} --transport webrtc"]
+CMD ["sh", "-c", "exec python /app/bot.py --host 0.0.0.0 --port ${PORT} --transport ${PIPECAT_TRANSPORT:-daily}"]
