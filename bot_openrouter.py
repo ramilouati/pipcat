@@ -1,5 +1,6 @@
 """Pipecat OpenRouter voice bot entrypoint for Railway."""
 
+import importlib.util
 import os
 
 from dotenv import load_dotenv
@@ -22,9 +23,20 @@ from pipecat.services.cartesia.tts import CartesiaTTSService
 from pipecat.services.deepgram.stt import DeepgramSTTService
 from pipecat.services.openrouter.llm import OpenRouterLLMService
 from pipecat.transports.base_transport import BaseTransport, TransportParams
-from pipecat.transports.daily.transport import DailyParams
 
 load_dotenv(override=True)
+
+
+def _transport_params() -> dict:
+    """WebRTC always; Daily only if `daily-python` is installed (pipecat-ai[daily])."""
+    params: dict = {
+        "webrtc": lambda: TransportParams(audio_in_enabled=True, audio_out_enabled=True),
+    }
+    if importlib.util.find_spec("daily") is not None:
+        from pipecat.transports.daily.transport import DailyParams
+
+        params["daily"] = lambda: DailyParams(audio_in_enabled=True, audio_out_enabled=True)
+    return params
 
 
 async def run_bot(transport: BaseTransport, runner_args: RunnerArguments):
@@ -77,13 +89,7 @@ async def run_bot(transport: BaseTransport, runner_args: RunnerArguments):
 
 
 async def bot(runner_args: RunnerArguments):
-    transport = await create_transport(
-        runner_args,
-        {
-            "daily": lambda: DailyParams(audio_in_enabled=True, audio_out_enabled=True),
-            "webrtc": lambda: TransportParams(audio_in_enabled=True, audio_out_enabled=True),
-        },
-    )
+    transport = await create_transport(runner_args, _transport_params())
     await run_bot(transport, runner_args)
 
 

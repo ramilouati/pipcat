@@ -1,4 +1,4 @@
-# Pipecat voice bot for Railway: Daily/WebRTC client at /client.
+# Pipecat voice bot. WebRTC: UI at /client. Daily: no /client — open / (redirects to Daily room).
 # Railway sets PORT; bind 0.0.0.0 for public access.
 
 FROM python:3.12-slim-bookworm
@@ -28,4 +28,5 @@ COPY bot_openrouter.py /app/bot.py
 EXPOSE 7860
 ENV PORT=7860
 
-CMD ["sh", "-c", "exec python /app/bot.py --host 0.0.0.0 --port ${PORT} --transport ${PIPECAT_TRANSPORT:-daily}"]
+# Default `webrtc`: Pipecat serves /client (browser mic). Use `daily` only if you have a Daily.co plan + DAILY_API_KEY (GET / redirects to Daily; unpaid accounts may see Daily billing pages).
+CMD ["sh", "-c", "exec python /app/bot.py --host 0.0.0.0 --port ${PORT} --transport ${PIPECAT_TRANSPORT:-webrtc}"]

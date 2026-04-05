@@ -1,0 +1,14 @@
+# Local voice bot: WebRTC only (no Daily). Requires .env with API keys.
+#
+#   docker compose up --build
+#   Open http://localhost:7860/client  (or http://localhost:7860/ → redirects)
+
+services:
+  pipecat:
+    build: .
+    ports:
+      - "7860:7860"
+    env_file: .env
+    environment:
+      PIPECAT_TRANSPORT: webrtc
+      PORT: "7860"
