@@ -18,9 +18,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libxcb1 \
     && rm -rf /var/lib/apt/lists/*
 
+# Install from local source so runtime uses repo patches (e.g., Twilio TURN in runner).
+COPY pyproject.toml uv.lock README.md LICENSE MANIFEST.in ./
+COPY src ./src
+
 RUN pip install --no-cache-dir uv \
     && uv pip install --system \
-    "pipecat-ai[daily,webrtc,silero,deepgram,cartesia,openrouter,runner]" \
+    -e ".[daily,webrtc,silero,deepgram,cartesia,openrouter,runner]" \
     "python-dotenv>=1.0.1,<2.0.0"
 
 COPY bot_openrouter.py /app/bot.py
