@@ -67,6 +67,8 @@ To run locally:
 
 import argparse
 import asyncio
+import base64
+import json
 import mimetypes
 import os
 import sys
@@ -75,6 +77,8 @@ from contextlib import asynccontextmanager
 from http import HTTPMethod
 from pathlib import Path
 from typing import Any, Dict, List, Optional, TypedDict, Union
+from urllib import error as urllib_error
+from urllib import request as urllib_request
 
 import aiohttp
 from fastapi.responses import FileResponse, Response
@@ -196,7 +200,10 @@ def _setup_webrtc_routes(app: FastAPI, args: argparse.Namespace):
     try:
         from pipecat_ai_small_webrtc_prebuilt.frontend import SmallWebRTCPrebuiltUI
 
-        from pipecat.transports.smallwebrtc.connection import SmallWebRTCConnection
+        from pipecat.transports.smallwebrtc.connection import (
+            IceServer as SmallWebRTCIceServer,
+            SmallWebRTCConnection,
+        )
         from pipecat.transports.smallwebrtc.request_handler import (
             IceCandidate,
             SmallWebRTCPatchRequest,
@@ -207,11 +214,13 @@ def _setup_webrtc_routes(app: FastAPI, args: argparse.Namespace):
         logger.error(f"WebRTC transport dependencies not installed: {e}")
         return
 
-    class IceServer(TypedDict, total=False):
+    class IceServerConfig(TypedDict, total=False):
         urls: Union[str, List[str]]
+        username: str
+        credential: str
 
     class IceConfig(TypedDict):
-        iceServers: List[IceServer]
+        iceServers: List[IceServerConfig]
 
     class StartBotResult(TypedDict, total=False):
         sessionId: str
@@ -219,6 +228,63 @@ def _setup_webrtc_routes(app: FastAPI, args: argparse.Namespace):
 
     # In-memory store of active sessions: session_id -> session info
     active_sessions: Dict[str, Dict[str, Any]] = {}
+
+    def _fetch_twilio_ice_servers() -> List[SmallWebRTCIceServer]:
+        """Fetch TURN/STUN servers from Twilio Network Traversal API.
+
+        Uses TWILIO_ACCOUNT_SID and TWILIO_AUTH_TOKEN from environment.
+        Returns an empty list when credentials are missing or request fails.
+        """
+        account_sid = os.getenv("TWILIO_ACCOUNT_SID")
+        auth_token = os.getenv("TWILIO_AUTH_TOKEN")
+        if not account_sid or not auth_token:
+            return []
+
+        url = f"https://api.twilio.com/2010-04-01/Accounts/{account_sid}/Tokens.json"
+        basic_auth = base64.b64encode(f"{account_sid}:{auth_token}".encode()).decode()
+        req = urllib_request.Request(url=url, method="POST", data=b"")
+        req.add_header("Authorization", f"Basic {basic_auth}")
+        req.add_header("Content-Type", "application/x-www-form-urlencoded")
+
+        try:
+            with urllib_request.urlopen(req, timeout=10) as resp:
+                payload = json.loads(resp.read().decode("utf-8"))
+        except urllib_error.URLError as e:
+            logger.warning(f"Failed to fetch Twilio ICE servers: {e}")
+            return []
+        except Exception as e:
+            logger.warning(f"Unexpected error fetching Twilio ICE servers: {e}")
+            return []
+
+        servers: List[SmallWebRTCIceServer] = []
+        for item in payload.get("ice_servers", []):
+            urls = item.get("urls")
+            if not urls:
+                continue
+            kwargs: Dict[str, Any] = {"urls": urls}
+            if item.get("username"):
+                kwargs["username"] = item["username"]
+            if item.get("credential"):
+                kwargs["credential"] = item["credential"]
+            servers.append(SmallWebRTCIceServer(**kwargs))
+        return servers
+
+    def _ice_server_to_config(ice_server: SmallWebRTCIceServer) -> IceServerConfig:
+        config: IceServerConfig = {"urls": ice_server.urls}
+        if ice_server.username:
+            config["username"] = ice_server.username
+        if ice_server.credential:
+            config["credential"] = ice_server.credential
+        return config
+
+    twilio_ice_servers = _fetch_twilio_ice_servers()
+    if twilio_ice_servers:
+        logger.info(f"Using {len(twilio_ice_servers)} Twilio ICE servers for WebRTC")
+    else:
+        logger.info("Twilio TURN not configured; using STUN fallback only")
+    webrtc_ice_servers = [SmallWebRTCIceServer(urls="stun:stun.l.google.com:19302")]
+    webrtc_ice_servers.extend(twilio_ice_servers)
+    webrtc_ice_config = [_ice_server_to_config(ice_server) for ice_server in webrtc_ice_servers]
 
     # Mount the frontend
     app.mount("/client", SmallWebRTCPrebuiltUI)
@@ -245,7 +311,7 @@ def _setup_webrtc_routes(app: FastAPI, args: argparse.Namespace):
 
     # Initialize the SmallWebRTC request handler
     small_webrtc_handler: SmallWebRTCRequestHandler = SmallWebRTCRequestHandler(
-        esp32_mode=args.esp32, host=args.host
+        ice_servers=webrtc_ice_servers, esp32_mode=args.esp32, host=args.host
     )
 
     @app.post("/api/offer")
@@ -293,9 +359,7 @@ def _setup_webrtc_routes(app: FastAPI, args: argparse.Namespace):
 
         result: StartBotResult = {"sessionId": session_id}
         if request_data.get("enableDefaultIceServers"):
-            result["iceConfig"] = IceConfig(
-                iceServers=[IceServer(urls=["stun:stun.l.google.com:19302"])]
-            )
+            result["iceConfig"] = IceConfig(iceServers=webrtc_ice_config)
 
         return result
 
