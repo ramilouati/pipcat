@@ -1,0 +1,28 @@
+name: Deploy to Hetzner
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Deploy over SSH
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.HETZNER_HOST }}
+          username: ${{ secrets.HETZNER_USER }}
+          key: ${{ secrets.HETZNER_SSH_KEY }}
+          port: ${{ secrets.HETZNER_PORT || 22 }}
+          script: |
+            set -e
+            export PATH="$HOME/.local/bin:$PATH"
+            cd /home/pipecat/app
+            git pull --ff-only origin main
+            uv sync --no-extra gstreamer --no-extra krisp --no-extra local-smart-turn --no-extra local
+            sudo systemctl restart pipecat-bot
+            sudo systemctl is-active --quiet pipecat-bot
+            echo "Deployment successful"
